@@ -85,6 +85,7 @@ fn dsp_encode_frame(
 ) {
     for i in 0..8 {
         b.coefficients[i][0] = coefficients_in[i * 2];
+        b.coefficients[i][1] = coefficients_in[i * 2 + 1];
     }
 
     for i in 0..8 {
