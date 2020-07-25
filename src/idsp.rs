@@ -23,34 +23,34 @@ impl From<std::io::Error> for DecodeError {
 
 #[derive(Debug)]
 pub struct IdspContainer {
-    looping: bool,
-    channel_count: usize,
-    sample_rate: usize,
-    loop_start: usize,
-    loop_end: usize,
-    sample_count: usize,
-    audio_data_offset: usize,
-    interleave_size: usize,
-    header_size: usize,
-    channel_info_size: usize,
-    audio_data_length: usize,
-    channels: Vec<ChannelMetadata>,
-    audio_data: Vec<Vec<u8>>,
+    pub looping: bool,
+    pub channel_count: usize,
+    pub sample_rate: usize,
+    pub loop_start: usize,
+    pub loop_end: usize,
+    pub sample_count: usize,
+    pub audio_data_offset: usize,
+    pub interleave_size: usize,
+    pub header_size: usize,
+    pub channel_info_size: usize,
+    pub audio_data_length: usize,
+    pub channels: Vec<ChannelMetadata>,
+    pub audio_data: Vec<Vec<u8>>,
 }
 
 #[derive(Debug)]
 pub struct ChannelMetadata {
-    sample_count: usize,
-    nibble_count: usize,
-    sample_rate: usize,
-    looping: bool,
-    start_address: usize,
-    end_address: usize,
-    current_address: usize,
-    coefficients: [i16; 16],
-    gain: i16,
-    start_context: GcAdpcmContext,
-    loop_context: GcAdpcmContext,
+    pub sample_count: usize,
+    pub nibble_count: usize,
+    pub sample_rate: usize,
+    pub looping: bool,
+    pub start_address: usize,
+    pub end_address: usize,
+    pub current_address: usize,
+    pub coefficients: [i16; 16],
+    pub gain: i16,
+    pub start_context: GcAdpcmContext,
+    pub loop_context: GcAdpcmContext,
 }
 
 #[derive(Debug)]
@@ -225,7 +225,7 @@ fn deinterleave(
 
 mod test {
     use super::*;
-    use crate::decode_gc_adpcm;
+    use crate::decode::decode_gc_adpcm;
     use wav::{BitDepth, Header};
 
     #[test]

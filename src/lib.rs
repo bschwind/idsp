@@ -1,7 +1,10 @@
+pub mod decode;
+pub mod encode;
 pub mod idsp;
 
 const SAMPLES_PER_FRAME: usize = 14;
 const NIBBLES_PER_FRAME: usize = 16;
+const BYTES_PER_FRAME: usize = 8;
 
 struct CodecParameters {
     sample_count: usize,
@@ -19,6 +22,18 @@ fn clamp_16(value: i32) -> i16 {
     }
 
     value as i16
+}
+
+fn clamp_4(value: i32) -> i8 {
+    if value > 7 {
+        return 7;
+    }
+
+    if value < -8 {
+        return -8;
+    }
+
+    value as i8
 }
 
 trait DivideByRoundUp {
@@ -54,6 +69,10 @@ fn high_nibble_signed(byte: u8) -> i8 {
     SIGNED_NIBBLES[((byte >> 4) & 0xF) as usize]
 }
 
+fn combine_nibbles(high: i32, low: i32) -> u8 {
+    ((high << 4) | (low & 0xF)) as u8
+}
+
 fn byte_count_to_sample_count(byte_count: usize) -> usize {
     nibble_count_to_sample_count(byte_count * 2)
 }
@@ -76,66 +95,4 @@ fn sample_count_to_nibble_count(sample_count: usize) -> usize {
     let extra_nibbles = if extra_samples == 0 { 0 } else { extra_samples + 2 };
 
     NIBBLES_PER_FRAME * frames + extra_nibbles
-}
-
-pub fn decode_gc_adpcm(adpcm: &[u8], coefficients: &[i16]) -> Vec<i16> {
-    let config = CodecParameters {
-        sample_count: byte_count_to_sample_count(adpcm.len()),
-        history_1: 0,
-        history_2: 0,
-    };
-
-    let mut pcm = vec![0; config.sample_count];
-
-    if config.sample_count == 0 {
-        return pcm;
-    }
-
-    let frame_count = config.sample_count.divide_by_round_up(SAMPLES_PER_FRAME);
-    let mut current_sample = 0;
-    let mut out_index = 0;
-    let mut in_index = 0;
-    let mut hist_1 = config.history_1;
-    let mut hist_2 = config.history_2;
-
-    for _i in 0..frame_count {
-        let predictor_scale: u8 = adpcm[in_index];
-        in_index += 1;
-
-        let scale: i32 = (1 << low_nibble(predictor_scale)) as i32 * 2048;
-        let predictor: i32 = high_nibble(predictor_scale) as i32;
-        let coef_1: i16 = coefficients[predictor as usize * 2];
-        let coef_2: i16 = coefficients[predictor as usize * 2 + 1];
-
-        let samples_to_read: i32 =
-            SAMPLES_PER_FRAME.min(config.sample_count - current_sample) as i32;
-
-        for s in 0..samples_to_read {
-            let adpcm_sample: i32 = if s % 2 == 0 {
-                high_nibble_signed(adpcm[in_index]) as i32
-            } else {
-                let sample = low_nibble_signed(adpcm[in_index]);
-                in_index += 1;
-                sample as i32
-            };
-
-            let distance: i32 = scale * adpcm_sample;
-            // TODO(bschwind) - should these coefficients be casted here?
-            let predicted_sample: i32 =
-                coef_1 as i32 * hist_1 as i32 + coef_2 as i32 * hist_2 as i32;
-            let corrected_sample: i32 = predicted_sample as i32 + distance;
-            let scaled_sample: i32 = (corrected_sample + 1024) >> 11;
-
-            let clamped_sample: i16 = clamp_16(scaled_sample);
-
-            hist_2 = hist_1;
-            hist_1 = clamped_sample;
-
-            pcm[out_index] = clamped_sample;
-            out_index += 1;
-            current_sample += 1;
-        }
-    }
-
-    pcm
 }
