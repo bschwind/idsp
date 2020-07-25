@@ -1,3 +1,4 @@
+use crate::{sample_count_to_byte_count, DivideByRoundUp};
 use bytes::{Buf, Bytes};
 use std::{
     fs::File,
@@ -11,6 +12,7 @@ const IDSP_HEADER: &[u8] = b"IDSP";
 pub enum DecodeError {
     Io(std::io::Error),
     InvalidHeader,
+    InvalidAudioLength,
 }
 
 impl From<std::io::Error> for DecodeError {
@@ -32,7 +34,7 @@ pub struct IdspContainer {
     header_size: usize,
     channel_info_size: usize,
     audio_data_length: usize,
-    channel_metadata: Vec<ChannelMetadata>,
+    channels: Vec<ChannelMetadata>,
     audio_data: Vec<Vec<u8>>,
 }
 
@@ -138,7 +140,17 @@ pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeErr
 
     let looping = channels.iter().any(|c| c.looping);
 
-    let audio_data = Vec::new();
+    // Read audio data
+    bytes.set_position(audio_data_offset as u64);
+    let interleave: usize = if interleave_size == 0 { audio_data_length } else { interleave_size };
+
+    let audio_data = deinterleave(
+        &mut bytes,
+        channel_count * audio_data_length,
+        interleave,
+        channel_count,
+        Some(sample_count_to_byte_count(sample_count)),
+    )?;
 
     let container = IdspContainer {
         looping,
@@ -152,21 +164,91 @@ pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeErr
         channel_info_size,
         audio_data_offset,
         audio_data_length,
-        channel_metadata: channels,
+        channels,
         audio_data,
     };
 
     Ok(container)
 }
 
+fn deinterleave(
+    bytes: &mut Cursor<Bytes>,
+    len: usize,
+    interleave_size: usize,
+    output_count: usize,
+    output_size: Option<usize>,
+) -> Result<Vec<Vec<u8>>, DecodeError> {
+    let remaining_length = bytes.get_ref().len() - bytes.position() as usize;
+
+    if remaining_length < len {
+        // Specified length is greater than the number of bytes remaining in the Stream
+        return Err(DecodeError::InvalidAudioLength);
+    }
+
+    if len % output_count != 0 {
+        // The input length must be divisible by the number of outputs.
+        return Err(DecodeError::InvalidAudioLength);
+    }
+
+    let input_size = len / output_count;
+    let output_size = output_size.unwrap_or(input_size);
+
+    let in_block_count = input_size.divide_by_round_up(interleave_size);
+    let out_block_count = output_size.divide_by_round_up(interleave_size);
+    let last_input_interleave_size = input_size - (in_block_count - 1) * interleave_size;
+    let last_output_interleave_size = output_size - (out_block_count - 1) * interleave_size;
+    let blocks_to_copy = in_block_count.min(out_block_count);
+
+    let mut outputs = vec![vec![0; output_size]; output_count];
+
+    for b in 0..blocks_to_copy {
+        let current_input_interlave_size =
+            if b == in_block_count - 1 { last_input_interleave_size } else { interleave_size };
+
+        let current_output_interleave_size =
+            if b == out_block_count - 1 { last_output_interleave_size } else { interleave_size };
+
+        let bytes_to_copy = current_input_interlave_size.min(current_output_interleave_size);
+
+        for o in 0..output_count {
+            let offset = interleave_size * b;
+            bytes.copy_to_slice(&mut outputs[o][offset..(offset + bytes_to_copy)]);
+
+            if bytes_to_copy < current_input_interlave_size {
+                bytes.advance(current_input_interlave_size - bytes_to_copy);
+            }
+        }
+    }
+
+    Ok(outputs)
+}
+
 mod test {
     use super::*;
+    use crate::decode_gc_adpcm;
+    use wav::{BitDepth, Header};
 
     #[test]
     fn test_file_read() {
         let idsp_bytes = include_bytes!("../test_files/13.idsp");
-        let idsp_file = read_idsp_bytes(idsp_bytes);
+        let _idsp_file = read_idsp_bytes(idsp_bytes);
+    }
 
-        println!("IDSP file: {:#?}", idsp_file);
+    #[test]
+    fn test_file_decode() {
+        let idsp_bytes = include_bytes!("../test_files/13.idsp");
+        let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
+
+        assert_eq!(idsp_file.channels.len(), 1);
+        assert_eq!(idsp_file.audio_data.len(), 1);
+
+        let decoded: Vec<i16> =
+            decode_gc_adpcm(&idsp_file.audio_data[0], &idsp_file.channels[0].coefficients);
+
+        let header =
+            Header::new(1, idsp_file.channels.len() as u16, idsp_file.sample_rate as u32, 16);
+
+        let mut output_file = std::fs::File::create("lol.wav").unwrap();
+        wav::write(header, BitDepth::Sixteen(decoded), &mut output_file).unwrap();
     }
 }

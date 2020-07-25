@@ -23,11 +23,16 @@ fn clamp_16(value: i32) -> i16 {
 
 trait DivideByRoundUp {
     fn divide_by_round_up(&self, divisor: usize) -> usize;
+    fn divide_by_2_round_up(&self) -> usize;
 }
 
 impl DivideByRoundUp for usize {
     fn divide_by_round_up(&self, divisor: usize) -> usize {
         (*self as f64 / divisor as f64).ceil() as usize
+    }
+
+    fn divide_by_2_round_up(&self) -> usize {
+        (*self / 2) + (*self & 1)
     }
 }
 
@@ -45,17 +50,16 @@ fn low_nibble_signed(byte: u8) -> i8 {
     SIGNED_NIBBLES[(byte & 0xF) as usize]
 }
 
-// public static sbyte GetLowNibbleSigned(byte value) => SignedNibbles[value & 0xF];
-
 fn high_nibble_signed(byte: u8) -> i8 {
     SIGNED_NIBBLES[((byte >> 4) & 0xF) as usize]
 }
-// public static sbyte GetHighNibbleSigned(byte value) => SignedNibbles[(value >> 4) & 0xF];
-// public static byte GetHighNibble(byte value) => (byte)((value >> 4) & 0xF);
-// public static byte GetLowNibble(byte value) => (byte)(value & 0xF);
 
 fn byte_count_to_sample_count(byte_count: usize) -> usize {
     nibble_count_to_sample_count(byte_count * 2)
+}
+
+fn sample_count_to_byte_count(sample_count: usize) -> usize {
+    sample_count_to_nibble_count(sample_count).divide_by_2_round_up()
 }
 
 fn nibble_count_to_sample_count(nibble_count: usize) -> usize {
@@ -64,6 +68,14 @@ fn nibble_count_to_sample_count(nibble_count: usize) -> usize {
     let extra_samples = if extra_nibbles < 2 { 0 } else { extra_nibbles - 2 };
 
     SAMPLES_PER_FRAME * frames + extra_samples
+}
+
+fn sample_count_to_nibble_count(sample_count: usize) -> usize {
+    let frames = sample_count / SAMPLES_PER_FRAME;
+    let extra_samples = sample_count % SAMPLES_PER_FRAME;
+    let extra_nibbles = if extra_samples == 0 { 0 } else { extra_samples + 2 };
+
+    NIBBLES_PER_FRAME * frames + extra_nibbles
 }
 
 pub fn decode_gc_adpcm(adpcm: &[u8], coefficients: &[i16]) -> Vec<i16> {
@@ -108,7 +120,9 @@ pub fn decode_gc_adpcm(adpcm: &[u8], coefficients: &[i16]) -> Vec<i16> {
             };
 
             let distance: i32 = scale * adpcm_sample;
-            let predicted_sample: i32 = (coef_1 * hist_1 + coef_2 * hist_2) as i32;
+            // TODO(bschwind) - should these coefficients be casted here?
+            let predicted_sample: i32 =
+                coef_1 as i32 * hist_1 as i32 + coef_2 as i32 * hist_2 as i32;
             let corrected_sample: i32 = predicted_sample as i32 + distance;
             let scaled_sample: i32 = (corrected_sample + 1024) >> 11;
 
