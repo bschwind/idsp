@@ -86,7 +86,6 @@ impl GcAdpcmContext {
 
 pub fn write_idsp_bytes(container: &IdspContainer) -> Result<Vec<u8>, ()> {
     let header_size = STREAM_INFO_SIZE + container.channel_count * CHANNEL_INFO_SIZE;
-    let file_size = header_size + container.audio_data_length;
     // TODO(jake): finish calculating header and file sizes
     // TODO(jake): verify order of header struct, seems different than C# version
     let mut bytes = BytesMut::new();
@@ -324,6 +323,7 @@ fn deinterleave(
     Ok(outputs)
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
     use crate::decode::decode_gc_adpcm;

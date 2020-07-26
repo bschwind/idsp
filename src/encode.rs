@@ -1,9 +1,6 @@
 use crate::{
-    clamp_16, clamp_4, combine_nibbles,
-    decode::decode_gc_adpcm,
-    idsp::{read_idsp_bytes, write_idsp_bytes},
-    math::{Coefficients, DivideByRoundUp},
-    sample_count_to_byte_count, CodecParameters, BYTES_PER_FRAME, SAMPLES_PER_FRAME,
+    clamp_16, clamp_4, combine_nibbles, math::DivideByRoundUp, sample_count_to_byte_count,
+    CodecParameters, BYTES_PER_FRAME, SAMPLES_PER_FRAME,
 };
 
 struct AdpcmEncodeBuffers {
@@ -238,9 +235,14 @@ fn dsp_encode_coefficient(
     }
 }
 
+#[cfg(test)]
 mod test {
-    use super::*;
-    use crate::decode::decode_gc_adpcm;
+    use crate::{
+        decode::decode_gc_adpcm,
+        encode::encode_gc_adpcm,
+        idsp::{read_idsp_bytes, write_idsp_bytes},
+        math::Coefficients,
+    };
     use wav::{BitDepth, Header};
 
     #[test]
@@ -248,7 +250,6 @@ mod test {
         let idsp_bytes = include_bytes!("../test_files/13.idsp");
         let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
 
-        println!("{:?}", &idsp_file);
         assert_eq!(idsp_file.channels.len(), 1);
         assert_eq!(idsp_file.audio_data.len(), 1);
 
@@ -272,10 +273,9 @@ mod test {
 
         assert_eq!(idsp_file.audio_data[0].len(), encoded.len());
 
-        for (original, new) in idsp_file.audio_data[0].iter().zip(encoded.iter()) {
-
-            // println!("{}, {}{}", original, new, if original != new { "!!!" } else { "" });
-        }
+        // for (original, new) in idsp_file.audio_data[0].iter().zip(encoded.iter()) {
+        //     println!("{}, {}{}", original, new, if original != new { "!!!" } else { "" });
+        // }
 
         let decoded_again: Vec<i16> =
             decode_gc_adpcm(&encoded, &idsp_file.channels[0].coefficients);
@@ -330,6 +330,10 @@ mod test {
     fn test_idsp_roundtrip() {
         let idsp_bytes = include_bytes!("../test_files/13.idsp");
         let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
+
+        println!("recorded sample_count: {}", idsp_file.sample_count);
+        println!("audio data len: {}", idsp_file.interleave_size);
+        println!("loop_end: {}", idsp_file.loop_end);
 
         let encoded_bytes = write_idsp_bytes(&idsp_file).unwrap();
         let decoded_idsp_file = read_idsp_bytes(&encoded_bytes).unwrap();
