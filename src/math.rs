@@ -234,7 +234,7 @@ fn bidirectional_filter(mtx: &mut [[f64; 3]], vec_idxs: &mut [usize], vec_out: &
         vec_out[i] = tmp;
     }
 
-    for i in (0..2).rev() {
+    for i in (1..=2).rev() {
         tmp = vec_out[i];
         for y in i + 1..=2 {
             tmp -= vec_out[y] * mtx[i][y];
@@ -282,7 +282,7 @@ fn matrix_filter(src: &mut [Vec<f64>], row: usize, dst: &mut [f64], mtx: &mut [[
         mtx[2][i] = -src[row][i];
     }
 
-    for i in (0..2).rev() {
+    for i in (1..=2).rev() {
         let val = 1.0 - (mtx[i][i] * mtx[i][i]);
         for y in 1..=i {
             mtx[i - 1][y] = ((mtx[i][i] * mtx[i][y]) + mtx[i][y]) / val;
