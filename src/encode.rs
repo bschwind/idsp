@@ -1,7 +1,7 @@
 use crate::{
     clamp_16, clamp_4, combine_nibbles,
     decode::decode_gc_adpcm,
-    idsp::read_idsp_bytes,
+    idsp::{read_idsp_bytes, write_idsp_bytes},
     math::{Coefficients, DivideByRoundUp},
     sample_count_to_byte_count, CodecParameters, BYTES_PER_FRAME, SAMPLES_PER_FRAME,
 };
@@ -324,5 +324,16 @@ mod test {
                 panic!("original and calculated coefficients differ more than 1%");
             }
         }
+    }
+
+    #[test]
+    fn test_idsp_roundtrip() {
+        let idsp_bytes = include_bytes!("../test_files/13.idsp");
+        let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
+
+        let encoded_bytes = write_idsp_bytes(&idsp_file).unwrap();
+        let decoded_idsp_file = read_idsp_bytes(&encoded_bytes).unwrap();
+
+        assert_eq!(idsp_file, decoded_idsp_file);
     }
 }
