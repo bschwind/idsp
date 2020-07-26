@@ -30,7 +30,6 @@ impl std::ops::Deref for Coefficients {
 
 impl<'a> From<&'a [i16]> for Coefficients {
     fn from(source: &[i16]) -> Self {
-        println!("source is {} ({} frames)", source.len(), source.len() / SAMPLES_PER_FRAME);
         let frame_count = source.len().divide_by_round_up(SAMPLES_PER_FRAME);
         let mut pcm_hist = [0i16; SAMPLES_PER_FRAME * 2];
         let mut coefs = [0i16; 16];
@@ -43,20 +42,15 @@ impl<'a> From<&'a [i16]> for Coefficients {
         let mut record_count = 0;
         let mut vec_best = [[0f64; 3]; 8];
 
-        let mut xxx = 0;
         for frame in source.chunks(SAMPLES_PER_FRAME) {
-            println!("on frame: {}", xxx);
-            xxx += 1;
             pcm_hist[SAMPLES_PER_FRAME..SAMPLES_PER_FRAME + frame.len()].copy_from_slice(frame);
 
             inner_product_merge(&mut vec1, &pcm_hist);
             if vec1[0].abs() > 10.0 {
-                println!("vec1[0]: {}", vec1[0].abs());
                 outer_product_merge(&mut mtx, &pcm_hist);
                 if !analyze_ranges(&mut mtx, &mut vec_idxs, &mut buffer) {
                     bidirectional_filter(&mut mtx, &mut vec_idxs, &mut vec1);
                     if !quadratic_merge(&mut vec1) {
-                        println!("finish_record {}", record_count);
                         finish_record(&mut vec1, &mut records[record_count]);
                         record_count += 1;
                     }
