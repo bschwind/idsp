@@ -132,12 +132,11 @@ fn inner_product_merge(out: &mut [f64], pcm: &[i16]) {
 }
 
 fn outer_product_merge(mtx: &mut [[f64; 3]], pcm: &[i16]) {
-    for x in 0..3 {
-        for y in 0..3 {
+    for x in 1..=2 {
+        for y in 1..=2 {
             mtx[x][y] = 0.0;
-            for z in 0..SAMPLES_PER_FRAME {
-                mtx[x][y] +=
-                    pcm[SAMPLES_PER_FRAME + z - x] as f64 * pcm[SAMPLES_PER_FRAME + z - y] as f64;
+            for z in 0..14 {
+                mtx[x][y] += pcm[14 + z - x] as f64 * pcm[14 + z - y] as f64;
             }
         }
     }
