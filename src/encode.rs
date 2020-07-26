@@ -248,6 +248,7 @@ mod test {
         let idsp_bytes = include_bytes!("../test_files/13.idsp");
         let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
 
+        println!("{:?}", &idsp_file);
         assert_eq!(idsp_file.channels.len(), 1);
         assert_eq!(idsp_file.audio_data.len(), 1);
 
