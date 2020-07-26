@@ -84,3 +84,11 @@ fn sample_count_to_nibble_count(sample_count: usize) -> usize {
 
     NIBBLES_PER_FRAME * frames + extra_nibbles
 }
+
+fn get_next_multiple(value: usize, multiple: usize) -> usize {
+    if multiple == 0 || value % multiple == 0 {
+        value
+    } else {
+        value + multiple - value % multiple
+    }
+}

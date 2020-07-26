@@ -1,4 +1,4 @@
-use crate::{sample_count_to_byte_count, DivideByRoundUp};
+use crate::{get_next_multiple, sample_count_to_byte_count, DivideByRoundUp};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::{
     fs::File,
@@ -38,6 +38,12 @@ pub struct IdspContainer {
     pub audio_data_length: usize,
     pub channels: Vec<ChannelMetadata>,
     pub audio_data: Vec<Vec<u8>>,
+}
+
+impl IdspContainer {
+    pub fn audio_data_len(&self) -> usize {
+        get_next_multiple(sample_count_to_byte_count(self.sample_count), self.interleave_size)
+    }
 }
 
 #[derive(Debug, PartialEq)]
@@ -95,8 +101,8 @@ pub fn write_idsp_bytes(container: &IdspContainer) -> Result<Vec<u8>, ()> {
     bytes.put_i32(container.interleave_size as i32);
     bytes.put_i32(STREAM_INFO_SIZE as i32);
     bytes.put_i32(CHANNEL_INFO_SIZE as i32);
-    bytes.put_i32(container.audio_data_offset as i32);
-    bytes.put_i32(container.audio_data_length as i32);
+    bytes.put_i32(header_size as i32);
+    bytes.put_i32(container.audio_data_len() as i32);
     bytes.resize(STREAM_INFO_SIZE, 0);
 
     for channel in container.channels.iter() {
