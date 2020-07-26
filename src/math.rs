@@ -15,34 +15,48 @@ impl DivideByRoundUp for usize {
     }
 }
 
-struct Coefficients {
-    coefs: [i16; 16],
+#[derive(Debug)]
+pub struct Coefficients {
+    pub coefs: [i16; 16],
+}
+
+impl std::ops::Deref for Coefficients {
+    type Target = [i16; 16];
+
+    fn deref(&self) -> &Self::Target {
+        &self.coefs
+    }
 }
 
 impl<'a> From<&'a [i16]> for Coefficients {
     fn from(source: &[i16]) -> Self {
+        println!("source is {} ({} frames)", source.len(), source.len() / SAMPLES_PER_FRAME);
         let frame_count = source.len().divide_by_round_up(SAMPLES_PER_FRAME);
         let mut pcm_hist = [0i16; SAMPLES_PER_FRAME * 2];
-        let mut hist_tmp = [0i16; SAMPLES_PER_FRAME];
         let mut coefs = [0i16; 16];
         let mut vec1 = [0f64; 3];
         let mut vec2 = [0f64; 3];
         let mut buffer = [0f64; 3];
         let mut mtx = [[0f64; 3]; 3];
-        let mut vec_idxs = [0usize, 3];
-        let mut records = vec![vec![0f64; frame_count * 2]; 3];
+        let mut vec_idxs = [0usize; 3];
+        let mut records = vec![vec![0f64; 3]; frame_count * 2];
         let mut record_count = 0;
         let mut vec_best = [[0f64; 3]; 8];
 
-        for frame in source.windows(SAMPLES_PER_FRAME) {
-            pcm_hist[SAMPLES_PER_FRAME..].copy_from_slice(frame);
+        let mut xxx = 0;
+        for frame in source.chunks(SAMPLES_PER_FRAME) {
+            println!("on frame: {}", xxx);
+            xxx += 1;
+            pcm_hist[SAMPLES_PER_FRAME..SAMPLES_PER_FRAME + frame.len()].copy_from_slice(frame);
 
             inner_product_merge(&mut vec1, &pcm_hist);
             if vec1[0].abs() > 10.0 {
+                println!("vec1[0]: {}", vec1[0].abs());
                 outer_product_merge(&mut mtx, &pcm_hist);
                 if !analyze_ranges(&mut mtx, &mut vec_idxs, &mut buffer) {
                     bidirectional_filter(&mut mtx, &mut vec_idxs, &mut vec1);
                     if !quadratic_merge(&mut vec1) {
+                        println!("finish_record {}", record_count);
                         finish_record(&mut vec1, &mut records[record_count]);
                         record_count += 1;
                     }
@@ -101,7 +115,7 @@ impl<'a> From<&'a [i16]> for Coefficients {
             } else {
                 coefs[z * 2 + 1] =
                     if d < std::i16::MIN as f64 { i16::MIN } else { d.round() as i16 };
-            }
+            };
         }
 
         Self { coefs }
@@ -109,10 +123,10 @@ impl<'a> From<&'a [i16]> for Coefficients {
 }
 
 fn inner_product_merge(out: &mut [f64], pcm: &[i16]) {
-    for i in 0..3 {
+    for i in 0..=2 {
         out[i] = 0.0;
-        for x in 0..SAMPLES_PER_FRAME {
-            out[i] -= pcm[SAMPLES_PER_FRAME + x - i] as f64 * pcm[SAMPLES_PER_FRAME + x] as f64;
+        for x in 0..14 {
+            out[i] -= pcm[14 + x - i] as f64 * pcm[14 + x] as f64;
         }
     }
 }
@@ -182,7 +196,7 @@ fn analyze_ranges(mtx: &mut [[f64; 3]], vec_idxs: &mut [usize], recips: &mut [f6
 
         if i != 2 {
             tmp = 1.0 / mtx[i][i];
-            for x in i + 1..=2 {
+            for x in (i + 1)..=2 {
                 mtx[x][i] *= tmp;
             }
         }
@@ -333,7 +347,7 @@ fn filter_records(
     let mut buffer1 = [0usize; 8];
     let mut buffer2 = [0f64; 3];
 
-    for x in 0..2 {
+    for _x in 0..2 {
         for y in 0..exp {
             buffer1[y] = 0;
             for i in 0..=2 {

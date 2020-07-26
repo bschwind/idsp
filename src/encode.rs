@@ -1,7 +1,9 @@
 use crate::{
-    clamp_16, clamp_4, combine_nibbles, decode::decode_gc_adpcm, idsp::read_idsp_bytes,
-    math::DivideByRoundUp, sample_count_to_byte_count, CodecParameters, BYTES_PER_FRAME,
-    SAMPLES_PER_FRAME,
+    clamp_16, clamp_4, combine_nibbles,
+    decode::decode_gc_adpcm,
+    idsp::read_idsp_bytes,
+    math::{Coefficients, DivideByRoundUp},
+    sample_count_to_byte_count, CodecParameters, BYTES_PER_FRAME, SAMPLES_PER_FRAME,
 };
 
 struct AdpcmEncodeBuffers {
@@ -254,7 +256,11 @@ mod test {
         let decoded: Vec<i16> =
             decode_gc_adpcm(&idsp_file.audio_data[0], &idsp_file.channels[0].coefficients);
 
-        let encoded = encode_gc_adpcm(&decoded, &idsp_file.channels[0].coefficients);
+        let coefs = Coefficients::from(&decoded[..]);
+        let orig_coefs = &idsp_file.channels[0].coefficients;
+
+        assert_eq!(&*coefs, orig_coefs);
+        let encoded = encode_gc_adpcm(&decoded, &*coefs);
 
         println!("encoded length after: {}", encoded.len());
 
