@@ -1,5 +1,5 @@
 use crate::{sample_count_to_byte_count, DivideByRoundUp};
-use bytes::{Buf, Bytes};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::{
     fs::File,
     io::{Cursor, Read},
@@ -7,6 +7,8 @@ use std::{
 };
 
 const IDSP_HEADER: &[u8] = b"IDSP";
+const STREAM_INFO_SIZE: usize = 0x40;
+const CHANNEL_INFO_SIZE: usize = 0x60;
 
 #[derive(Debug)]
 pub enum DecodeError {
@@ -68,6 +70,29 @@ impl GcAdpcmContext {
 
         Self { predictor_scale, hist_1, hist_2 }
     }
+}
+
+pub fn write_idsp_bytes(container: IdspContainer) -> Result<Vec<u8>, ()> {
+    let header_size = STREAM_INFO_SIZE + container.channel_count * CHANNEL_INFO_SIZE;
+    // TODO(jake): finish calculating header and file sizes
+    // TODO(jake): verify order of header struct, seems different than C# version
+    let mut bytes = BytesMut::new();
+    bytes.extend_from_slice(IDSP_HEADER);
+    bytes.put_i32(0);
+
+    bytes.put_i32(container.channel_count as i32);
+    bytes.put_i32(container.sample_rate as i32);
+    bytes.put_i32(container.sample_count as i32);
+    bytes.put_i32(container.loop_start as i32);
+    bytes.put_i32(container.loop_end as i32);
+    bytes.put_i32(container.interleave_size as i32);
+    bytes.put_i32(container.header_size as i32);
+    bytes.put_i32(container.channel_info_size as i32);
+    bytes.put_i32(container.audio_data_offset as i32);
+    bytes.put_i32(container.audio_data_length as i32);
+
+    for channel in container.channels.iter() {}
+    Ok(vec![])
 }
 
 pub fn read_idsp<P: AsRef<Path>>(file_path: P) -> Result<IdspContainer, DecodeError> {
