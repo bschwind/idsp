@@ -1,6 +1,9 @@
 pub mod decode;
 pub mod encode;
 pub mod idsp;
+pub mod math;
+
+use math::DivideByRoundUp;
 
 const SAMPLES_PER_FRAME: usize = 14;
 const NIBBLES_PER_FRAME: usize = 16;
@@ -34,21 +37,6 @@ fn clamp_4(value: i32) -> i8 {
     }
 
     value as i8
-}
-
-trait DivideByRoundUp {
-    fn divide_by_round_up(&self, divisor: usize) -> usize;
-    fn divide_by_2_round_up(&self) -> usize;
-}
-
-impl DivideByRoundUp for usize {
-    fn divide_by_round_up(&self, divisor: usize) -> usize {
-        (*self as f64 / divisor as f64).ceil() as usize
-    }
-
-    fn divide_by_2_round_up(&self) -> usize {
-        (*self / 2) + (*self & 1)
-    }
 }
 
 const SIGNED_NIBBLES: &[i8] = &[0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, -4, -3, -2, -1];

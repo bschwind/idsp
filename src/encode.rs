@@ -1,6 +1,6 @@
 use crate::{
     clamp_16, clamp_4, combine_nibbles, decode::decode_gc_adpcm, idsp::read_idsp_bytes,
-    sample_count_to_byte_count, CodecParameters, DivideByRoundUp, BYTES_PER_FRAME,
+    math::DivideByRoundUp, sample_count_to_byte_count, CodecParameters, BYTES_PER_FRAME,
     SAMPLES_PER_FRAME,
 };
 
