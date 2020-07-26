@@ -320,7 +320,7 @@ mod test {
                     (orig - new).abs(),
                     orig.abs() as f64 * 0.01
                 );
-                panic!("original and calculated coefficients differ more than 0.5%");
+                panic!("original and calculated coefficients differ more than 1%");
             }
         }
     }
