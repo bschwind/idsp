@@ -1,7 +1,6 @@
 use crate::{
-    clamp_16, clamp_4, combine_nibbles, decode::decode_gc_adpcm, idsp::read_idsp_bytes,
-    sample_count_to_byte_count, CodecParameters, DivideByRoundUp, BYTES_PER_FRAME,
-    SAMPLES_PER_FRAME,
+    math::{clamp_16, clamp_4, combine_nibbles, sample_count_to_byte_count, DivideByRoundUp},
+    CodecParameters, BYTES_PER_FRAME, SAMPLES_PER_FRAME,
 };
 
 struct AdpcmEncodeBuffers {
@@ -236,9 +235,14 @@ fn dsp_encode_coefficient(
     }
 }
 
+#[cfg(test)]
 mod test {
-    use super::*;
-    use crate::decode::decode_gc_adpcm;
+    use crate::{
+        coefficients::Coefficients,
+        decode::decode_gc_adpcm,
+        encode::encode_gc_adpcm,
+        idsp::{read_idsp_bytes, write_idsp_bytes},
+    };
     use wav::{BitDepth, Header};
 
     #[test]
@@ -254,16 +258,24 @@ mod test {
         let decoded: Vec<i16> =
             decode_gc_adpcm(&idsp_file.audio_data[0], &idsp_file.channels[0].coefficients);
 
-        let encoded = encode_gc_adpcm(&decoded, &idsp_file.channels[0].coefficients);
+        let mut raw_pcm = Vec::new();
+        for sample in decoded.iter() {
+            raw_pcm.extend_from_slice(&sample.to_le_bytes());
+        }
+
+        std::fs::write("raw_pcm.bin", &raw_pcm).unwrap();
+
+        let orig_coefs = &idsp_file.channels[0].coefficients;
+
+        let encoded = encode_gc_adpcm(&decoded, orig_coefs);
 
         println!("encoded length after: {}", encoded.len());
 
         assert_eq!(idsp_file.audio_data[0].len(), encoded.len());
 
-        for (original, new) in idsp_file.audio_data[0].iter().zip(encoded.iter()) {
-
-            // println!("{}, {}{}", original, new, if original != new { "!!!" } else { "" });
-        }
+        // for (original, new) in idsp_file.audio_data[0].iter().zip(encoded.iter()) {
+        //     println!("{}, {}{}", original, new, if original != new { "!!!" } else { "" });
+        // }
 
         let decoded_again: Vec<i16> =
             decode_gc_adpcm(&encoded, &idsp_file.channels[0].coefficients);
@@ -273,5 +285,59 @@ mod test {
 
         let mut output_file = std::fs::File::create("roundtrip.wav").unwrap();
         wav::write(header, BitDepth::Sixteen(decoded_again), &mut output_file).unwrap();
+    }
+
+    #[test]
+    fn test_coefficient_proximity() {
+        let idsp_bytes = include_bytes!("../test_files/13.idsp");
+        let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
+
+        assert_eq!(idsp_file.channels.len(), 1);
+        assert_eq!(idsp_file.audio_data.len(), 1);
+
+        println!("encoded length before: {}", idsp_file.audio_data[0].len());
+
+        let decoded: Vec<i16> =
+            decode_gc_adpcm(&idsp_file.audio_data[0], &idsp_file.channels[0].coefficients);
+
+        let mut raw_pcm = Vec::new();
+        for sample in decoded.iter() {
+            raw_pcm.extend_from_slice(&sample.to_le_bytes());
+        }
+
+        std::fs::write("raw_pcm.bin", &raw_pcm).unwrap();
+
+        let coefs = Coefficients::from(&decoded[..]);
+        let orig_coefs = &idsp_file.channels[0].coefficients;
+
+        for (orig, new) in coefs.iter().zip(orig_coefs.iter()) {
+            if ((orig - new) as f64).abs() > (orig.abs() as f64 * 0.01) {
+                println!("orig: {:?}", orig_coefs);
+                println!("calc: {:?}", *coefs);
+                println!(
+                    "{} - {} = {} > {}",
+                    orig,
+                    new,
+                    (orig - new).abs(),
+                    orig.abs() as f64 * 0.01
+                );
+                panic!("original and calculated coefficients differ more than 1%");
+            }
+        }
+    }
+
+    #[test]
+    fn test_idsp_roundtrip() {
+        let idsp_bytes = include_bytes!("../test_files/13.idsp");
+        let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
+
+        println!("recorded sample_count: {}", idsp_file.sample_count);
+        println!("audio data len: {}", idsp_file.interleave_size);
+        println!("loop_end: {}", idsp_file.loop_end);
+
+        let encoded_bytes = write_idsp_bytes(&idsp_file).unwrap();
+        let decoded_idsp_file = read_idsp_bytes(&encoded_bytes).unwrap();
+
+        assert_eq!(idsp_file, decoded_idsp_file);
     }
 }

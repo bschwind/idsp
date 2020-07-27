@@ -1,5 +1,8 @@
-use crate::{sample_count_to_byte_count, DivideByRoundUp};
-use bytes::{Buf, Bytes};
+use crate::{
+    math::{get_next_multiple, sample_count_to_byte_count},
+    DivideByRoundUp,
+};
+use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::{
     fs::File,
     io::{Cursor, Read},
@@ -7,6 +10,8 @@ use std::{
 };
 
 const IDSP_HEADER: &[u8] = b"IDSP";
+const STREAM_INFO_SIZE: usize = 0x40;
+const CHANNEL_INFO_SIZE: usize = 0x60;
 
 #[derive(Debug)]
 pub enum DecodeError {
@@ -21,7 +26,7 @@ impl From<std::io::Error> for DecodeError {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct IdspContainer {
     pub looping: bool,
     pub channel_count: usize,
@@ -38,7 +43,13 @@ pub struct IdspContainer {
     pub audio_data: Vec<Vec<u8>>,
 }
 
-#[derive(Debug)]
+impl IdspContainer {
+    pub fn audio_data_len(&self) -> usize {
+        get_next_multiple(sample_count_to_byte_count(self.sample_count), self.interleave_size)
+    }
+}
+
+#[derive(Debug, PartialEq)]
 pub struct ChannelMetadata {
     pub sample_count: usize,
     pub nibble_count: usize,
@@ -53,7 +64,7 @@ pub struct ChannelMetadata {
     pub loop_context: GcAdpcmContext,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub struct GcAdpcmContext {
     predictor_scale: i16,
     hist_1: i16,
@@ -68,6 +79,63 @@ impl GcAdpcmContext {
 
         Self { predictor_scale, hist_1, hist_2 }
     }
+
+    pub fn write_to_buf(&self, buf: &mut BytesMut) {
+        buf.put_i16(self.predictor_scale);
+        buf.put_i16(self.hist_1);
+        buf.put_i16(self.hist_2);
+    }
+}
+
+pub fn write_idsp_bytes(container: &IdspContainer) -> Result<Vec<u8>, ()> {
+    let header_size = STREAM_INFO_SIZE + container.channel_count * CHANNEL_INFO_SIZE;
+    // TODO(jake): finish calculating header and file sizes
+    // TODO(jake): verify order of header struct, seems different than C# version
+    let mut bytes = BytesMut::new();
+    bytes.extend_from_slice(IDSP_HEADER);
+    bytes.put_i32(0);
+
+    bytes.put_i32(container.channel_count as i32);
+    bytes.put_i32(container.sample_rate as i32);
+    bytes.put_i32(container.sample_count as i32);
+    bytes.put_i32(container.loop_start as i32);
+    bytes.put_i32(container.loop_end as i32);
+    bytes.put_i32(container.interleave_size as i32);
+    bytes.put_i32(STREAM_INFO_SIZE as i32);
+    bytes.put_i32(CHANNEL_INFO_SIZE as i32);
+    bytes.put_i32(header_size as i32);
+    bytes.put_i32(container.audio_data_len() as i32);
+    bytes.resize(STREAM_INFO_SIZE, 0);
+
+    for channel in container.channels.iter() {
+        let mut channel_bytes = BytesMut::new();
+
+        channel_bytes.put_i32(channel.sample_count as i32);
+        channel_bytes.put_i32(channel.nibble_count as i32);
+        channel_bytes.put_i32(channel.sample_rate as i32);
+        channel_bytes.put_i16(channel.looping as i16);
+        channel_bytes.put_i16(0);
+        channel_bytes.put_i32(channel.start_address as i32);
+        channel_bytes.put_i32(channel.end_address as i32);
+        channel_bytes.put_i32(channel.current_address as i32);
+        for coef in channel.coefficients.iter() {
+            channel_bytes.put_i16(*coef);
+        }
+        channel_bytes.put_i16(channel.gain as i16);
+        channel.start_context.write_to_buf(&mut channel_bytes);
+        channel.loop_context.write_to_buf(&mut channel_bytes);
+
+        channel_bytes.resize(CHANNEL_INFO_SIZE, 0);
+        bytes.unsplit(channel_bytes);
+    }
+
+    bytes.extend_from_slice(&interleave(
+        &container.audio_data,
+        container.interleave_size,
+        Some(container.audio_data_length),
+    ));
+
+    Ok(bytes.to_vec())
 }
 
 pub fn read_idsp<P: AsRef<Path>>(file_path: P) -> Result<IdspContainer, DecodeError> {
@@ -79,14 +147,13 @@ pub fn read_idsp<P: AsRef<Path>>(file_path: P) -> Result<IdspContainer, DecodeEr
 }
 
 pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeError> {
-    let mut bytes = Cursor::new(Bytes::copy_from_slice(original_bytes));
-
-    if &Buf::bytes(&bytes)[..IDSP_HEADER.len()] != IDSP_HEADER {
+    if &original_bytes[..IDSP_HEADER.len()] != IDSP_HEADER {
         return Err(DecodeError::InvalidHeader);
     }
 
-    bytes.advance(IDSP_HEADER.len());
-    bytes.advance(4); // Skip this empty space?
+    let mut bytes = Cursor::new(Bytes::copy_from_slice(original_bytes));
+
+    bytes.advance(8);
 
     let channel_count = bytes.get_i32() as usize;
     let sample_rate = bytes.get_i32() as usize;
@@ -171,6 +238,42 @@ pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeErr
     Ok(container)
 }
 
+fn interleave(
+    inputs: &Vec<Vec<u8>>,
+    interleave_size: usize,
+    output_size: Option<usize>,
+) -> Vec<u8> {
+    let input_size = inputs[0].len();
+    let output_size = output_size.unwrap_or(input_size);
+
+    let input_count = inputs.len();
+    let in_block_count = input_size.divide_by_round_up(interleave_size);
+    let out_block_count = output_size.divide_by_round_up(interleave_size);
+    let last_input_interleave_size = input_size - (in_block_count - 1) * interleave_size;
+    let last_output_interleave_size = output_size - (out_block_count - 1) * interleave_size;
+    let blocks_to_copy = in_block_count.min(out_block_count);
+
+    let mut output = vec![0u8; output_size * input_count];
+
+    for b in 0..blocks_to_copy {
+        let current_input_interleave_size =
+            if b == in_block_count - 1 { last_input_interleave_size } else { interleave_size };
+        let current_output_interleave_size =
+            if b == out_block_count - 1 { last_output_interleave_size } else { interleave_size };
+        let bytes_to_copy = current_input_interleave_size.min(current_output_interleave_size);
+
+        for i in 0..input_count {
+            let input_index = interleave_size * b;
+            let output_index =
+                interleave_size * b * input_count + current_output_interleave_size * i;
+            output[output_index..output_index + bytes_to_copy]
+                .copy_from_slice(&inputs[i][input_index..input_index + bytes_to_copy]);
+        }
+    }
+
+    output
+}
+
 fn deinterleave(
     bytes: &mut Cursor<Bytes>,
     len: usize,
@@ -223,6 +326,7 @@ fn deinterleave(
     Ok(outputs)
 }
 
+#[cfg(test)]
 mod test {
     use super::*;
     use crate::decode::decode_gc_adpcm;

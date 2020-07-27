@@ -1,2 +1,6 @@
 /target
 Cargo.lock
+.vscode/
+lol.wav
+roundtrip.wav
+.DS_Store

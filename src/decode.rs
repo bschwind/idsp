@@ -1,6 +1,9 @@
 use crate::{
-    byte_count_to_sample_count, clamp_16, high_nibble, high_nibble_signed, low_nibble,
-    low_nibble_signed, CodecParameters, DivideByRoundUp, SAMPLES_PER_FRAME,
+    math::{
+        byte_count_to_sample_count, clamp_16, high_nibble, high_nibble_signed, low_nibble,
+        low_nibble_signed, DivideByRoundUp,
+    },
+    CodecParameters, SAMPLES_PER_FRAME,
 };
 
 pub fn decode_gc_adpcm(adpcm: &[u8], coefficients: &[i16]) -> Vec<i16> {
