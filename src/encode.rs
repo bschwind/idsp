@@ -1,5 +1,5 @@
 use crate::{
-    clamp_16, clamp_4, combine_nibbles, math::DivideByRoundUp, sample_count_to_byte_count,
+    math::{clamp_16, clamp_4, combine_nibbles, sample_count_to_byte_count, DivideByRoundUp},
     CodecParameters, BYTES_PER_FRAME, SAMPLES_PER_FRAME,
 };
 
@@ -238,10 +238,10 @@ fn dsp_encode_coefficient(
 #[cfg(test)]
 mod test {
     use crate::{
+        coefficients::Coefficients,
         decode::decode_gc_adpcm,
         encode::encode_gc_adpcm,
         idsp::{read_idsp_bytes, write_idsp_bytes},
-        math::Coefficients,
     };
     use wav::{BitDepth, Header};
 
