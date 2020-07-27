@@ -31,11 +31,8 @@ pub struct IdspContainer {
     pub loop_start: usize,
     pub loop_end: usize,
     pub sample_count: usize,
-    pub audio_data_offset: usize,
     pub interleave_size: usize,
     pub header_size: usize,
-    pub channel_info_size: usize,
-    pub audio_data_length: usize,
     pub channels: Vec<ChannelMetadata>,
     pub audio_data: Vec<Vec<u8>>,
 }
@@ -129,7 +126,7 @@ pub fn write_idsp_bytes(container: &IdspContainer) -> Result<Vec<u8>, ()> {
     bytes.extend_from_slice(&interleave(
         &container.audio_data,
         container.interleave_size,
-        Some(container.audio_data_length),
+        Some(container.audio_data_len()),
     ));
 
     Ok(bytes.to_vec())
@@ -225,9 +222,6 @@ pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeErr
         loop_end,
         interleave_size,
         header_size,
-        channel_info_size,
-        audio_data_offset,
-        audio_data_length,
         channels,
         audio_data,
     };
@@ -351,5 +345,20 @@ mod test {
 
         let mut output_file = std::fs::File::create("lol.wav").unwrap();
         wav::write(header, BitDepth::Sixteen(decoded), &mut output_file).unwrap();
+    }
+
+    #[test]
+    fn test_idsp_roundtrip() {
+        let idsp_bytes = include_bytes!("../test_files/13.idsp");
+        let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
+
+        println!("recorded sample_count: {}", idsp_file.sample_count);
+        println!("audio data len: {}", idsp_file.interleave_size);
+        println!("loop_end: {}", idsp_file.loop_end);
+
+        let encoded_bytes = write_idsp_bytes(&idsp_file).unwrap();
+        let decoded_idsp_file = read_idsp_bytes(&encoded_bytes).unwrap();
+
+        assert_eq!(idsp_file, decoded_idsp_file);
     }
 }

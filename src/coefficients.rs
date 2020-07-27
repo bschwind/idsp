@@ -13,8 +13,9 @@ impl std::ops::Deref for Coefficients {
     }
 }
 
-impl<'a> From<&'a [i16]> for Coefficients {
-    fn from(source: &[i16]) -> Self {
+impl<T: AsRef<[i16]>> From<T> for Coefficients {
+    fn from(source: T) -> Self {
+        let source = source.as_ref();
         let frame_count = source.len().divide_by_round_up(SAMPLES_PER_FRAME);
         let mut pcm_hist = [0i16; SAMPLES_PER_FRAME * 2];
         let mut coefs = [0i16; 16];

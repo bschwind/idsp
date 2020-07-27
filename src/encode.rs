@@ -238,15 +238,13 @@ fn dsp_encode_coefficient(
 #[cfg(test)]
 mod test {
     use crate::{
-        coefficients::Coefficients,
-        decode::decode_gc_adpcm,
-        encode::encode_gc_adpcm,
-        idsp::{read_idsp_bytes, write_idsp_bytes},
+        coefficients::Coefficients, decode::decode_gc_adpcm, encode::encode_gc_adpcm,
+        idsp::read_idsp_bytes,
     };
     use wav::{BitDepth, Header};
 
     #[test]
-    fn test_file_roundtrip() {
+    fn test_encode_roundtrip() {
         let idsp_bytes = include_bytes!("../test_files/13.idsp");
         let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
 
@@ -263,10 +261,7 @@ mod test {
             raw_pcm.extend_from_slice(&sample.to_le_bytes());
         }
 
-        std::fs::write("raw_pcm.bin", &raw_pcm).unwrap();
-
         let orig_coefs = &idsp_file.channels[0].coefficients;
-
         let encoded = encode_gc_adpcm(&decoded, orig_coefs);
 
         println!("encoded length after: {}", encoded.len());
@@ -324,20 +319,5 @@ mod test {
                 panic!("original and calculated coefficients differ more than 1%");
             }
         }
-    }
-
-    #[test]
-    fn test_idsp_roundtrip() {
-        let idsp_bytes = include_bytes!("../test_files/13.idsp");
-        let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
-
-        println!("recorded sample_count: {}", idsp_file.sample_count);
-        println!("audio data len: {}", idsp_file.interleave_size);
-        println!("loop_end: {}", idsp_file.loop_end);
-
-        let encoded_bytes = write_idsp_bytes(&idsp_file).unwrap();
-        let decoded_idsp_file = read_idsp_bytes(&encoded_bytes).unwrap();
-
-        assert_eq!(idsp_file, decoded_idsp_file);
     }
 }
