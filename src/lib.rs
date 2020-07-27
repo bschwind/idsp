@@ -4,8 +4,6 @@ pub mod encode;
 pub mod idsp;
 pub mod math;
 
-use math::DivideByRoundUp;
-
 const SAMPLES_PER_FRAME: usize = 14;
 const NIBBLES_PER_FRAME: usize = 16;
 const BYTES_PER_FRAME: usize = 8;

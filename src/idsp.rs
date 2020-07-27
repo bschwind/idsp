@@ -1,7 +1,4 @@
-use crate::{
-    math::{get_next_multiple, sample_count_to_byte_count},
-    DivideByRoundUp,
-};
+use crate::math::{get_next_multiple, sample_count_to_byte_count, DivideByRoundUp};
 use bytes::{Buf, BufMut, Bytes, BytesMut};
 use std::{
     fs::File,
