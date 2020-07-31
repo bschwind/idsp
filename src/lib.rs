@@ -29,15 +29,16 @@ mod test {
         let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
 
         assert_eq!(idsp_file.channels.len(), 1);
-        assert_eq!(idsp_file.audio_data.len(), 1);
 
-        let wav_pcm: Vec<i16> =
-            decode_gc_adpcm(&idsp_file.audio_data[0], &idsp_file.channels[0].coefficients);
+        let wav_pcm: Vec<i16> = decode_gc_adpcm(
+            &idsp_file.channels[0].audio,
+            &idsp_file.channels[0].metadata.coefficients,
+        );
 
         let coefficients = Coefficients::from(&wav_pcm);
 
-        let gc_adpcm = encode_gc_adpcm(&wav_pcm, &*coefficients);
+        let _gc_adpcm = encode_gc_adpcm(&wav_pcm, &*coefficients);
 
-        write_idsp_bytes(&IdspContainer { sample_count: wav_pcm.len(), ..idsp_file });
+        write_idsp_bytes(&IdspContainer { sample_count: wav_pcm.len(), ..idsp_file }).unwrap();
     }
 }

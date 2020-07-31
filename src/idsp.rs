@@ -33,8 +33,7 @@ pub struct IdspContainer {
     pub sample_count: usize,
     pub interleave_size: usize,
     pub header_size: usize,
-    pub channels: Vec<ChannelMetadata>,
-    pub audio_data: Vec<Vec<u8>>,
+    pub channels: Vec<Channel>,
 }
 
 impl IdspContainer {
@@ -56,6 +55,12 @@ pub struct ChannelMetadata {
     pub gain: i16,
     pub start_context: GcAdpcmContext,
     pub loop_context: GcAdpcmContext,
+}
+
+#[derive(Debug, PartialEq)]
+pub struct Channel {
+    pub metadata: ChannelMetadata,
+    pub audio: Vec<u8>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -103,28 +108,29 @@ pub fn write_idsp_bytes(container: &IdspContainer) -> Result<Vec<u8>, ()> {
 
     for channel in container.channels.iter() {
         let mut channel_bytes = BytesMut::new();
+        let metadata = &channel.metadata;
 
-        channel_bytes.put_i32(channel.sample_count as i32);
-        channel_bytes.put_i32(channel.nibble_count as i32);
-        channel_bytes.put_i32(channel.sample_rate as i32);
-        channel_bytes.put_i16(channel.looping as i16);
+        channel_bytes.put_i32(metadata.sample_count as i32);
+        channel_bytes.put_i32(metadata.nibble_count as i32);
+        channel_bytes.put_i32(metadata.sample_rate as i32);
+        channel_bytes.put_i16(metadata.looping as i16);
         channel_bytes.put_i16(0);
-        channel_bytes.put_i32(channel.start_address as i32);
-        channel_bytes.put_i32(channel.end_address as i32);
-        channel_bytes.put_i32(channel.current_address as i32);
-        for coef in channel.coefficients.iter() {
+        channel_bytes.put_i32(metadata.start_address as i32);
+        channel_bytes.put_i32(metadata.end_address as i32);
+        channel_bytes.put_i32(metadata.current_address as i32);
+        for coef in metadata.coefficients.iter() {
             channel_bytes.put_i16(*coef);
         }
-        channel_bytes.put_i16(channel.gain as i16);
-        channel.start_context.write_to_buf(&mut channel_bytes);
-        channel.loop_context.write_to_buf(&mut channel_bytes);
+        channel_bytes.put_i16(metadata.gain as i16);
+        metadata.start_context.write_to_buf(&mut channel_bytes);
+        metadata.loop_context.write_to_buf(&mut channel_bytes);
 
         channel_bytes.resize(CHANNEL_INFO_SIZE, 0);
         bytes.unsplit(channel_bytes);
     }
 
     bytes.extend_from_slice(&interleave(
-        &container.audio_data,
+        &container.channels,
         container.interleave_size,
         Some(container.audio_data_len()),
     ));
@@ -160,7 +166,7 @@ pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeErr
     let audio_data_offset = bytes.get_i32() as usize;
     let audio_data_length = bytes.get_i32() as usize;
 
-    let mut channels = vec![];
+    let mut metadatas = vec![];
     for i in 0..channel_count {
         bytes.set_position((header_size + i * channel_info_size) as u64);
 
@@ -196,10 +202,10 @@ pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeErr
             loop_context,
         };
 
-        channels.push(channel);
+        metadatas.push(channel);
     }
 
-    let looping = channels.iter().any(|c| c.looping);
+    let looping = metadatas.iter().any(|c| c.looping);
 
     // Read audio data
     bytes.set_position(audio_data_offset as u64);
@@ -213,6 +219,12 @@ pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeErr
         Some(sample_count_to_byte_count(sample_count)),
     )?;
 
+    let channels = metadatas
+        .into_iter()
+        .zip(audio_data.into_iter())
+        .map(|(metadata, audio)| Channel { metadata, audio })
+        .collect();
+
     let container = IdspContainer {
         looping,
         channel_count,
@@ -223,18 +235,17 @@ pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeErr
         interleave_size,
         header_size,
         channels,
-        audio_data,
     };
 
     Ok(container)
 }
 
 fn interleave(
-    inputs: &Vec<Vec<u8>>,
+    inputs: &Vec<Channel>,
     interleave_size: usize,
     output_size: Option<usize>,
 ) -> Vec<u8> {
-    let input_size = inputs[0].len();
+    let input_size = inputs[0].audio.len();
     let output_size = output_size.unwrap_or(input_size);
 
     let input_count = inputs.len();
@@ -258,7 +269,7 @@ fn interleave(
             let output_index =
                 interleave_size * b * input_count + current_output_interleave_size * i;
             output[output_index..output_index + bytes_to_copy]
-                .copy_from_slice(&inputs[i][input_index..input_index + bytes_to_copy]);
+                .copy_from_slice(&inputs[i].audio[input_index..input_index + bytes_to_copy]);
         }
     }
 
@@ -335,10 +346,11 @@ mod test {
         let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
 
         assert_eq!(idsp_file.channels.len(), 1);
-        assert_eq!(idsp_file.audio_data.len(), 1);
 
-        let decoded: Vec<i16> =
-            decode_gc_adpcm(&idsp_file.audio_data[0], &idsp_file.channels[0].coefficients);
+        let decoded: Vec<i16> = decode_gc_adpcm(
+            &idsp_file.channels[0].audio,
+            &idsp_file.channels[0].metadata.coefficients,
+        );
 
         let header =
             Header::new(1, idsp_file.channels.len() as u16, idsp_file.sample_rate as u32, 16);

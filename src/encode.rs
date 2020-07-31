@@ -249,31 +249,32 @@ mod test {
         let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
 
         assert_eq!(idsp_file.channels.len(), 1);
-        assert_eq!(idsp_file.audio_data.len(), 1);
 
-        println!("encoded length before: {}", idsp_file.audio_data[0].len());
+        println!("encoded length before: {}", idsp_file.channels[0].audio.len());
 
-        let decoded: Vec<i16> =
-            decode_gc_adpcm(&idsp_file.audio_data[0], &idsp_file.channels[0].coefficients);
+        let decoded: Vec<i16> = decode_gc_adpcm(
+            &idsp_file.channels[0].audio,
+            &idsp_file.channels[0].metadata.coefficients,
+        );
 
         let mut raw_pcm = Vec::new();
         for sample in decoded.iter() {
             raw_pcm.extend_from_slice(&sample.to_le_bytes());
         }
 
-        let orig_coefs = &idsp_file.channels[0].coefficients;
+        let orig_coefs = &idsp_file.channels[0].metadata.coefficients;
         let encoded = encode_gc_adpcm(&decoded, orig_coefs);
 
         println!("encoded length after: {}", encoded.len());
 
-        assert_eq!(idsp_file.audio_data[0].len(), encoded.len());
+        assert_eq!(idsp_file.channels[0].audio.len(), encoded.len());
 
         // for (original, new) in idsp_file.audio_data[0].iter().zip(encoded.iter()) {
         //     println!("{}, {}{}", original, new, if original != new { "!!!" } else { "" });
         // }
 
         let decoded_again: Vec<i16> =
-            decode_gc_adpcm(&encoded, &idsp_file.channels[0].coefficients);
+            decode_gc_adpcm(&encoded, &idsp_file.channels[0].metadata.coefficients);
 
         let header =
             Header::new(1, idsp_file.channels.len() as u16, idsp_file.sample_rate as u32, 16);
@@ -288,12 +289,13 @@ mod test {
         let idsp_file = read_idsp_bytes(idsp_bytes).unwrap();
 
         assert_eq!(idsp_file.channels.len(), 1);
-        assert_eq!(idsp_file.audio_data.len(), 1);
 
-        println!("encoded length before: {}", idsp_file.audio_data[0].len());
+        println!("encoded length before: {}", idsp_file.channels[0].audio.len());
 
-        let decoded: Vec<i16> =
-            decode_gc_adpcm(&idsp_file.audio_data[0], &idsp_file.channels[0].coefficients);
+        let decoded: Vec<i16> = decode_gc_adpcm(
+            &idsp_file.channels[0].audio,
+            &idsp_file.channels[0].metadata.coefficients,
+        );
 
         let mut raw_pcm = Vec::new();
         for sample in decoded.iter() {
@@ -303,7 +305,7 @@ mod test {
         std::fs::write("raw_pcm.bin", &raw_pcm).unwrap();
 
         let coefs = Coefficients::from(&decoded[..]);
-        let orig_coefs = &idsp_file.channels[0].coefficients;
+        let orig_coefs = &idsp_file.channels[0].metadata.coefficients;
 
         for (orig, new) in coefs.iter().zip(orig_coefs.iter()) {
             if ((orig - new) as f64).abs() > (orig.abs() as f64 * 0.01) {
