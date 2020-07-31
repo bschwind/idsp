@@ -37,8 +37,9 @@ mod test {
 
         let coefficients = Coefficients::from(&wav_pcm);
 
-        let _gc_adpcm = encode_gc_adpcm(&wav_pcm, &*coefficients);
+        let gcadpcm = encode_gc_adpcm(&wav_pcm, &*coefficients);
 
-        write_idsp_bytes(&IdspContainer { sample_count: wav_pcm.len(), ..idsp_file }).unwrap();
+        write_idsp_bytes(&IdspContainer { sample_count: gcadpcm.sample_count, ..idsp_file })
+            .unwrap();
     }
 }

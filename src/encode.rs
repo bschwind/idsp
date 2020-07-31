@@ -2,6 +2,7 @@ use crate::{
     math::{clamp_16, clamp_4, combine_nibbles, sample_count_to_byte_count, DivideByRoundUp},
     CodecParameters, BYTES_PER_FRAME, SAMPLES_PER_FRAME,
 };
+use std::ops::{Deref, DerefMut};
 
 struct AdpcmEncodeBuffers {
     coefficients: Vec<Vec<i16>>,
@@ -9,6 +10,25 @@ struct AdpcmEncodeBuffers {
     adpcm_out: Vec<Vec<i32>>,
     scale: Vec<i32>,
     total_distance: Vec<f64>,
+}
+
+pub struct GcAdpcmStream {
+    pub sample_count: usize,
+    pub data: Vec<u8>,
+}
+
+impl Deref for GcAdpcmStream {
+    type Target = Vec<u8>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.data
+    }
+}
+
+impl DerefMut for GcAdpcmStream {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.data
+    }
 }
 
 impl AdpcmEncodeBuffers {
@@ -29,7 +49,7 @@ impl AdpcmEncodeBuffers {
     }
 }
 
-pub fn encode_gc_adpcm(pcm: &[i16], coefficients: &[i16]) -> Vec<u8> {
+pub fn encode_gc_adpcm(pcm: &[i16], coefficients: &[i16]) -> GcAdpcmStream {
     let config = CodecParameters { sample_count: pcm.len(), history_1: 0, history_2: 0 };
 
     let sample_count = pcm.len();
@@ -72,7 +92,7 @@ pub fn encode_gc_adpcm(pcm: &[i16], coefficients: &[i16]) -> Vec<u8> {
         pcm_buffer[1] = pcm_buffer[15];
     }
 
-    adpcm
+    GcAdpcmStream { sample_count, data: adpcm }
 }
 
 fn dsp_encode_frame(
