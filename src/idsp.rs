@@ -23,7 +23,7 @@ impl From<std::io::Error> for DecodeError {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct IdspContainer {
     pub looping: bool,
     pub channel_count: usize,
@@ -42,7 +42,7 @@ impl IdspContainer {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct ChannelMetadata {
     pub sample_count: usize,
     pub nibble_count: usize,
@@ -57,13 +57,13 @@ pub struct ChannelMetadata {
     pub loop_context: GcAdpcmContext,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Channel {
     pub metadata: ChannelMetadata,
     pub audio: Vec<u8>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct GcAdpcmContext {
     predictor_scale: i16,
     hist_1: i16,

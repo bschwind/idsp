@@ -4,6 +4,13 @@ pub mod encode;
 pub mod idsp;
 pub mod math;
 
+pub use crate::{
+    coefficients::Coefficients,
+    decode::decode_gc_adpcm,
+    encode::encode_gc_adpcm,
+    idsp::{read_idsp_bytes, write_idsp_bytes, IdspContainer},
+};
+
 const SAMPLES_PER_FRAME: usize = 14;
 const NIBBLES_PER_FRAME: usize = 16;
 const BYTES_PER_FRAME: usize = 8;

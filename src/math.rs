@@ -77,7 +77,7 @@ fn nibble_count_to_sample_count(nibble_count: usize) -> usize {
     SAMPLES_PER_FRAME * frames + extra_samples
 }
 
-fn sample_count_to_nibble_count(sample_count: usize) -> usize {
+pub fn sample_count_to_nibble_count(sample_count: usize) -> usize {
     let frames = sample_count / SAMPLES_PER_FRAME;
     let extra_samples = sample_count % SAMPLES_PER_FRAME;
     let extra_nibbles = if extra_samples == 0 { 0 } else { extra_samples + 2 };
