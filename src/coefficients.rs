@@ -83,18 +83,32 @@ impl<T: AsRef<[i16]>> From<T> for Coefficients {
         for z in 0..8 {
             let mut d = -vec_best[z][1] * 2048.0;
             if d > 0.0 {
-                coefs[z * 2] = if d > std::i16::MAX as f64 { i16::MAX } else { d.round() as i16 };
+                coefs[z * 2] = if d > std::i16::MAX as f64 {
+                    i16::MAX
+                } else {
+                    d.round() as i16
+                };
             } else {
-                coefs[z * 2] = if d < std::i16::MIN as f64 { i16::MIN } else { d.round() as i16 };
+                coefs[z * 2] = if d < std::i16::MIN as f64 {
+                    i16::MIN
+                } else {
+                    d.round() as i16
+                };
             }
 
             d = -vec_best[z][2] * 2048.0;
             if d > 0.0 {
-                coefs[z * 2 + 1] =
-                    if d > std::i16::MAX as f64 { i16::MAX } else { d.round() as i16 };
+                coefs[z * 2 + 1] = if d > std::i16::MAX as f64 {
+                    i16::MAX
+                } else {
+                    d.round() as i16
+                };
             } else {
-                coefs[z * 2 + 1] =
-                    if d < std::i16::MIN as f64 { i16::MIN } else { d.round() as i16 };
+                coefs[z * 2 + 1] = if d < std::i16::MIN as f64 {
+                    i16::MIN
+                } else {
+                    d.round() as i16
+                };
             };
         }
 

@@ -38,7 +38,10 @@ pub struct IdspContainer {
 
 impl IdspContainer {
     pub fn audio_data_len(&self) -> usize {
-        get_next_multiple(sample_count_to_byte_count(self.sample_count), self.interleave_size)
+        get_next_multiple(
+            sample_count_to_byte_count(self.sample_count),
+            self.interleave_size,
+        )
     }
 }
 
@@ -57,10 +60,18 @@ pub struct ChannelMetadata {
     pub loop_context: GcAdpcmContext,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct Channel {
     pub metadata: ChannelMetadata,
     pub audio: Vec<u8>,
+}
+
+impl std::fmt::Debug for Channel {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+        fmt.debug_struct("Channel")
+            .field("metadata", &self.metadata)
+            .finish()
+    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -76,7 +87,11 @@ impl GcAdpcmContext {
         let hist_1 = buf.get_i16();
         let hist_2 = buf.get_i16();
 
-        Self { predictor_scale, hist_1, hist_2 }
+        Self {
+            predictor_scale,
+            hist_1,
+            hist_2,
+        }
     }
 
     pub fn write_to_buf(&self, buf: &mut BytesMut) {
@@ -209,7 +224,11 @@ pub fn read_idsp_bytes(original_bytes: &[u8]) -> Result<IdspContainer, DecodeErr
 
     // Read audio data
     bytes.set_position(audio_data_offset as u64);
-    let interleave: usize = if interleave_size == 0 { audio_data_length } else { interleave_size };
+    let interleave: usize = if interleave_size == 0 {
+        audio_data_length
+    } else {
+        interleave_size
+    };
 
     let audio_data = deinterleave(
         &mut bytes,
@@ -258,10 +277,16 @@ fn interleave(
     let mut output = vec![0u8; output_size * input_count];
 
     for b in 0..blocks_to_copy {
-        let current_input_interleave_size =
-            if b == in_block_count - 1 { last_input_interleave_size } else { interleave_size };
-        let current_output_interleave_size =
-            if b == out_block_count - 1 { last_output_interleave_size } else { interleave_size };
+        let current_input_interleave_size = if b == in_block_count - 1 {
+            last_input_interleave_size
+        } else {
+            interleave_size
+        };
+        let current_output_interleave_size = if b == out_block_count - 1 {
+            last_output_interleave_size
+        } else {
+            interleave_size
+        };
         let bytes_to_copy = current_input_interleave_size.min(current_output_interleave_size);
 
         for i in 0..input_count {
@@ -307,11 +332,17 @@ fn deinterleave(
     let mut outputs = vec![vec![0; output_size]; output_count];
 
     for b in 0..blocks_to_copy {
-        let current_input_interlave_size =
-            if b == in_block_count - 1 { last_input_interleave_size } else { interleave_size };
+        let current_input_interlave_size = if b == in_block_count - 1 {
+            last_input_interleave_size
+        } else {
+            interleave_size
+        };
 
-        let current_output_interleave_size =
-            if b == out_block_count - 1 { last_output_interleave_size } else { interleave_size };
+        let current_output_interleave_size = if b == out_block_count - 1 {
+            last_output_interleave_size
+        } else {
+            interleave_size
+        };
 
         let bytes_to_copy = current_input_interlave_size.min(current_output_interleave_size);
 
@@ -352,8 +383,12 @@ mod test {
             &idsp_file.channels[0].metadata.coefficients,
         );
 
-        let header =
-            Header::new(1, idsp_file.channels.len() as u16, idsp_file.sample_rate as u32, 16);
+        let header = Header::new(
+            1,
+            idsp_file.channels.len() as u16,
+            idsp_file.sample_rate as u32,
+            16,
+        );
 
         let mut output_file = std::fs::File::create("lol.wav").unwrap();
         wav::write(header, BitDepth::Sixteen(decoded), &mut output_file).unwrap();
